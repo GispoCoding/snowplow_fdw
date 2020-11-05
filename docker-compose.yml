@@ -1,0 +1,24 @@
+version: "3.7"
+
+services:
+  postgis-db:
+    build:
+      context: ./docker
+      dockerfile: postgis.Dockerfile
+    volumes:
+      - fdw-db-data:/var/lib/postgresql
+      - ./:/snowplowfdw
+    environment:
+      - POSTGRES_DB=postgres
+      - POSTGRES_USER=postgres
+      - POSTGRES_PASS=postgres
+      - ALLOW_IP_RANGE=0.0.0.0/0
+      - FOREIGN_SERVER=dev_fdw
+    ports:
+      - 5434:5432
+    restart: unless-stopped
+    healthcheck:
+      test: "exit 0"
+
+volumes:
+  fdw-db-data:
