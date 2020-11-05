@@ -7,9 +7,11 @@ Inspired greatly by [geofdw](https://github.com/bosth/geofdw).
 
 ## Development
 1. Install docker and docker-compose.
-2. `docker-compose up -d --build`
+2. Start PostgreSQL with PostGIS with: `docker-compose up -d --build`
 3. Install snowplow_fdw foreign data wrapper with: `docker-compose exec postgis-db bash /scripts/dev_install.sh`
-4. If you make any changes to the code, just repeat the installation
+4. If you make any changes to the code, just repeat the previous step
+
+Stop database with `docker-compose stop` and start it next time with `docker-compose start`.
 
 ## Production (Tested in Debian buster)
 
@@ -20,17 +22,25 @@ Inspired greatly by [geofdw](https://github.com/bosth/geofdw).
     apt install python python3 python3-dev python3-pip pgxnclient
     pip3 install setuptools
     ```
-3. Connect to your database and enable Multicorn
+2. Install Install Multicorn for Foreign Data Wrappers
+    ```shell script
+    pgxn install multicorn
+    ```
+2. Install plpygis for Foreign Data Wrapper support for Postgis
+    ```shell script
+    pip3 install plpygis
+    ```
+4. Connect to your database and enable Multicorn
     ```sql
     CREATE EXTENSION postgis;
     CREATE EXTENSION multicorn;
     ```
-4. Go to the to directory where you cloned the project and install it with:
+5. Go to the to directory where you cloned the project and install it with:
     ```shell script
     python3 setup.py install
     ```
 
-You have to restart Postgresql in order to find the package (`systemctl postgresql restart` or `service postgresql restart`).
+You may have to restart Postgresql in order to find the package (`systemctl postgresql restart` or `service postgresql restart`).
 
 # Usage
 

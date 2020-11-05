@@ -16,7 +16,7 @@ services:
       - FOREIGN_SERVER=dev_fdw
     ports:
       - 5434:5432
-    restart: unless-stopped
+    restart: "no"
     healthcheck:
       test: "exit 0"
 
