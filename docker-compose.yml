@@ -20,5 +20,15 @@ services:
     healthcheck:
       test: "exit 0"
 
+  pgadmin:
+    image: dpage/pgadmin4:4.27
+    environment:
+      - PGADMIN_DEFAULT_EMAIL=pauliina@gispo.fi
+      - PGADMIN_DEFAULT_PASSWORD=pgad20
+    depends_on:
+      - postgis-db
+    ports:
+      - 5000:80
+
 volumes:
   fdw-db-data:
