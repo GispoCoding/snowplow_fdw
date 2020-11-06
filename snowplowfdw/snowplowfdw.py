@@ -1,49 +1,58 @@
 import json
-from multicorn import ForeignDataWrapper, Qual
-from logging import INFO
 import requests
 
+from multicorn import ForeignDataWrapper
+from multicorn.utils import log_to_postgres
+from logging import ERROR, INFO, WARNING
+
 API_URL = "https://tampere.fluentprogress.fi/KuntoTampere/v1/snowplow/{}"
-MACHINES="?"
-MACHINE_TYPES="mt"
+DATA = "data"
 
 VALID_URLS = {
     # groups: "groups"
-    MACHINES: "?",
-    MACHINE_TYPES: "mt"
+    DATA: "mt"
 }
 
+class ForeignDataWrapperError(Exception):
+
+    def __init__(self, message):
+        log_to_postgres(message, ERROR)
+
+class MissingOptionError(ForeignDataWrapperError):
+    """
+    Required option missing from __init__ (e.g. GeoJSON FDW requires a url
+    option).
+    """
+
+    def __init__(self, option):
+        message = "Missing option '%s'" % option
+        super(MissingOptionError, self).__init__(message)
+
+
+class OptionTypeError(ForeignDataWrapperError):
+    """
+    Option has wrong type (e.g. SRID must be an integer).
+    """
+
+    def __init__(self, option, option_type):
+        message = "Option %s is not of type %s" % (option, option_type)
+        super(OptionTypeError, self).__init__(message)
 
 class SnowplowForeignDataWrapper(ForeignDataWrapper):
 
     def __init__(self, options, columns):
         super(SnowplowForeignDataWrapper, self).__init__(options, columns)
+        self.options = options
+        self.columns = columns
         self.key = self.get_option("url")
-        #self.columns = columns
-        #J self.category_type = self.get_option("category", required=False, default=VALID_CATEGORY_TYPES[REGION])
-        #J self.srid = self.get_option("srid", required=False, default=3067, option_type=int)
         try:
             self.url = VALID_URLS.get(self.key)
         except ValueError as e:
             self.log("Invalid url value {}".format(options.get("url", "")))
             raise e
 
-    #def execute(self, quals, columns):
-        #for index in range(20):
-            #line = {}
-            #for column_name in self.columns:
-                #line[column_name] = '%s %s' % (column_name, index)
-                #line[column_name] = '%s' % ()
-            #yield line
-
     def execute(self, quals, columns):
-        if self.key == MACHINES:
-            data = self.get_data(quals, columns)
-            for item in data:
-                ret = {'id': item['id'], 'machine_type': item['machine_type'], 'last_timestamp': item['last_location']['timestamp'],
-                       'last_location': item['last_location']['coords'], 'last_event': item['last_location']['events']}
-                yield ret
-        elif self.key == MACHINE_TYPES:
+        if self.key == DATA:
             data = self.get_data(quals, columns)
             for item in data:
                 ret = {'id': item['id'], 'name': item['name']}
@@ -63,7 +72,6 @@ class SnowplowForeignDataWrapper(ForeignDataWrapper):
         except requests.exceptions.Timeout as e:
             self.log("Snowplow FDW: timeout connecting to {}".format(url))
             return []
-
         if response.ok:
             try:
                 return json.loads(response.content)
@@ -74,3 +82,17 @@ class SnowplowForeignDataWrapper(ForeignDataWrapper):
             self.log("Snowplow FDW: server returned status code {} with text {} for url {}".format(response.status_code,
                                                                                               response.text, url))
             return []
+
+    def get_option(self, option, required=True, default=None, option_type=str):
+        if required and option not in self.options:
+            raise MissingOptionError(option)
+        value = self.options.get(option, default)
+        if value is None:
+            return None
+        try:
+            return option_type(value)
+        except ValueError as e:
+            raise OptionTypeError(option, option_type)
+
+    def log(self, message, level=WARNING):
+        log_to_postgres(message, level)
