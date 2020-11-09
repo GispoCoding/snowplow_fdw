@@ -11,11 +11,13 @@ DATA = "data"
 VALID_URLS = {
     # groups: "groups"
     #DATA: "mt"
-    DATA: "op"
-    #DATA: '?'+"id"
+    #DATA: "op"
+    DATA: "?"
     #DATA: "mo"
-    #DATA: "{45}?history={10}"
-    #DATA: '45'+'?'+"history="+'10'
+    # location historiat, ilman last locationeita
+    #DATA: "45?history=10"
+    # testi isolla lukumaaralla
+    #DATA: "45?history=1000000"
 }
 
 class ForeignDataWrapperError(Exception):
@@ -60,15 +62,14 @@ class SnowplowForeignDataWrapper(ForeignDataWrapper):
         if self.key == DATA:
             data = self.get_data(quals, columns)
             for item in data:
+            #for item in data["location_history"]:
                 # mt, op, mo
-                ret = {'id': item['id'], 'name': item['name']}
-                # "{?}"
-                #ret = {'id': item['id'], 'machine_type': item['machine_type'], 'last_timestamp': item['last_location']['timestamp'],
-                       #'last_coords': item['last_location']['coords'], 'last_event': item['last_location']['events']}
-                # idseen liittyva history, en saa menemaan lapi
-                #ret = {'timestamp': item[0]['timestamp'],
-                       #'coords': item[0]['coords'],
-                       #'events': item[0]['events']}
+                #ret = {'id': item['id'], 'name': item['name']}
+                # "?"
+                ret = {'id': item['id'], 'machine_type': item['machine_type'], 'last_timestamp': item['last_location']['timestamp'],
+                       'last_coords': item['last_location']['coords'], 'last_event': item['last_location']['events']}
+                # idseen liittyva history
+                #ret = {'timestamp': item['timestamp'], 'coords': item['coords'], 'events': item['events']}
                 yield ret
 
     def get_data(self, quals, columns):
@@ -87,7 +88,8 @@ class SnowplowForeignDataWrapper(ForeignDataWrapper):
             return []
         if response.ok:
             try:
-                return json.loads(response.content)
+                #return json.loads(response.content)
+                return response.json()
             except ValueError as e:
                 self.log("Snowplow FDW: invalid JSON")
                 return []
