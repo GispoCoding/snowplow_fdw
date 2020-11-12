@@ -6,7 +6,6 @@ services:
       context: ./docker
       dockerfile: postgis.Dockerfile
     volumes:
-      - ./postgres.conf:/etc/postgresql/postgresql.conf
       - fdw-db-data:/var/lib/postgresql
       - ./:/snowplowfdw
     environment:

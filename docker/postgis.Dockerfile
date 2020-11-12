@@ -1,12 +1,5 @@
 ARG IMAGE_VERSION=12.4
 
-FROM postgres:$IMAGE_VERSION
-
-RUN apt-get update && apt-get -y install git build-essential postgresql-server-dev-12
-
-RUN git clone https://github.com/citusdata/pg_cron.git
-RUN cd pg_cron && make && make install
-
 FROM kartoza/postgis:$IMAGE_VERSION
 MAINTAINER gispo<info@gispo.fi>
 
@@ -18,9 +11,8 @@ RUN apt-get update \
     python3-dev \
     python3-pip \
     pgxnclient \
+    postgresql-12-cron \
     && apt clean
-
-WORKDIR /
 
 RUN pip3 install -q setuptools
 
@@ -28,7 +20,7 @@ RUN pip3 install -q setuptools
 RUN pgxn install multicorn
 
 # Install plpygis for Foreign Data Wrapper support for Postgis
-RUN pip3 install plpygis
+RUN pip3 install -q plpygis
 
 WORKDIR /
 
