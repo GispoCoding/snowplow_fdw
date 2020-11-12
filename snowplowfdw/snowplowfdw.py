@@ -1,5 +1,5 @@
 import json
-#import requests
+import requests
 #import sched, time
 
 from multicorn import ForeignDataWrapper

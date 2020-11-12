@@ -16,7 +16,7 @@ services:
       - ALLOW_IP_RANGE=0.0.0.0/0
       - FOREIGN_SERVER=dev_fdw
     ports:
-      - 5434:5432
+      - 5432:5432
     restart: unless-stopped
     healthcheck:
       test: "exit 0"
