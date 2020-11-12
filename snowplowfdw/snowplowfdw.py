@@ -1,5 +1,6 @@
 import json
-import requests
+#import requests
+#import sched, time
 
 from multicorn import ForeignDataWrapper
 from multicorn.utils import log_to_postgres
@@ -12,10 +13,10 @@ VALID_URLS = {
     # groups: "groups"
     #DATA: "mt"
     #DATA: "op"
-    DATA: "?"
+    #DATA: "?"
     #DATA: "mo"
     # location historiat, ilman last locationeita
-    #DATA: "45?history=10"
+    DATA: "45?history=10"
     # testi isolla lukumaaralla
     #DATA: "45?history=1000000"
 }
@@ -60,16 +61,37 @@ class SnowplowForeignDataWrapper(ForeignDataWrapper):
 
     def execute(self, quals, columns):
         if self.key == DATA:
+            #s = sched.scheduler(time.time, time.sleep)
+            #def get_databatch(sc):
+                #print("Doing stuff...")
+                # do your stuff
+                #data = self.get_data(quals, columns)
+                #for item in data:
+                #for item in data["location_history"]:
+                    # mt, op, mo
+                    # ret = {'id': item['id'], 'name': item['name']}
+                    # "?"
+                    #ret = {'id': item['id'], 'machine_type': item['machine_type'],
+                           #'last_timestamp': item['last_location']['timestamp'],
+                           #'last_coords': item['last_location']['coords'],
+                           #'last_event': item['last_location']['events']}
+                    # idseen liittyva history
+                    #ret = {'timestamp': item['timestamp'], 'coords': item['coords'], 'events': item['events']}
+                    #yield ret
+                #s.enter(60, 1, get_databatch, (sc,))
+            #s.enter(60, 1, get_databatch, (s,))
+            #s.run()
+
             data = self.get_data(quals, columns)
-            for item in data:
-            #for item in data["location_history"]:
+            #for item in data:
+            for item in data["location_history"]:
                 # mt, op, mo
                 #ret = {'id': item['id'], 'name': item['name']}
                 # "?"
-                ret = {'id': item['id'], 'machine_type': item['machine_type'], 'last_timestamp': item['last_location']['timestamp'],
-                       'last_coords': item['last_location']['coords'], 'last_event': item['last_location']['events']}
+                #ret = {'id': item['id'], 'machine_type': item['machine_type'], 'last_timestamp': item['last_location']['timestamp'],
+                       #'last_coords': item['last_location']['coords'], 'last_event': item['last_location']['events']}
                 # idseen liittyva history
-                #ret = {'timestamp': item['timestamp'], 'coords': item['coords'], 'events': item['events']}
+                ret = {'timestamp': item['timestamp'], 'coords': item['coords'], 'events': item['events']}
                 yield ret
 
     def get_data(self, quals, columns):

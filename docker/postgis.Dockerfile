@@ -1,4 +1,12 @@
 ARG IMAGE_VERSION=12.4
+
+FROM postgres:$IMAGE_VERSION
+
+RUN apt-get update && apt-get -y install git build-essential postgresql-server-dev-12
+
+RUN git clone https://github.com/citusdata/pg_cron.git
+RUN cd pg_cron && make && make install
+
 FROM kartoza/postgis:$IMAGE_VERSION
 MAINTAINER gispo<info@gispo.fi>
 
