@@ -1,24 +1,24 @@
-import json
 import requests
-#import sched, time
+import datetime
+import pendulum
+#import json
 
 from multicorn import ForeignDataWrapper
 from multicorn.utils import log_to_postgres
 from logging import ERROR, INFO, WARNING
 
-API_URL = "https://tampere.fluentprogress.fi/KuntoTampere/v1/snowplow/{}"
+API_URL = "https://tampere.fluentprogress.fi/KuntoTampere/v1/snowplow{}"
 DATA = "data"
 
 VALID_URLS = {
-    # groups: "groups"
-    #DATA: "mt"
-    #DATA: "op"
-    #DATA: "?"
-    #DATA: "mo"
-    # location historiat, ilman last locationeita
-    DATA: "45?history=10"
-    # testi isolla lukumaaralla
-    #DATA: "45?history=1000000"
+    #DATA: "/mt"
+    #DATA: "/op"
+    #DATA: ""
+    #DATA: "/mo"
+    # location historiat (ilman last locationeita), jos luetaan kerran minuutissa
+    #DATA: "/45?history=12"
+    # id avaimilla
+    DATA: "?history=12"
 }
 
 class ForeignDataWrapperError(Exception):
@@ -53,6 +53,7 @@ class SnowplowForeignDataWrapper(ForeignDataWrapper):
         self.options = options
         self.columns = columns
         self.key = self.get_option("url")
+        self.machines = self.get_option("machines")
         try:
             self.url = VALID_URLS.get(self.key)
         except ValueError as e:
@@ -60,42 +61,30 @@ class SnowplowForeignDataWrapper(ForeignDataWrapper):
             raise e
 
     def execute(self, quals, columns):
+        #avain = (VALID_URLS.get(self.key)).split('?')[0]
+        avain = self.machines
         if self.key == DATA:
-            #s = sched.scheduler(time.time, time.sleep)
-            #def get_databatch(sc):
-                #print("Doing stuff...")
-                # do your stuff
-                #data = self.get_data(quals, columns)
-                #for item in data:
-                #for item in data["location_history"]:
-                    # mt, op, mo
-                    # ret = {'id': item['id'], 'name': item['name']}
-                    # "?"
-                    #ret = {'id': item['id'], 'machine_type': item['machine_type'],
-                           #'last_timestamp': item['last_location']['timestamp'],
-                           #'last_coords': item['last_location']['coords'],
-                           #'last_event': item['last_location']['events']}
-                    # idseen liittyva history
-                    #ret = {'timestamp': item['timestamp'], 'coords': item['coords'], 'events': item['events']}
-                    #yield ret
-                #s.enter(60, 1, get_databatch, (sc,))
-            #s.enter(60, 1, get_databatch, (s,))
-            #s.run()
-
-            data = self.get_data(quals, columns)
-            #for item in data:
+            data = self.get_data(avain, quals, columns)
+            # mt, op, mo
+            # for item in data:
+            # ret = {'id': item['id'], 'name': item['name']}
             for item in data["location_history"]:
-                # mt, op, mo
-                #ret = {'id': item['id'], 'name': item['name']}
-                # "?"
-                #ret = {'id': item['id'], 'machine_type': item['machine_type'], 'last_timestamp': item['last_location']['timestamp'],
-                       #'last_coords': item['last_location']['coords'], 'last_event': item['last_location']['events']}
-                # idseen liittyva history
-                ret = {'timestamp': item['timestamp'], 'coords': item['coords'], 'events': item['events']}
+                # tiettyyn idseen liittyva history
+                ret = {'id': avain, 'timestamp': item['timestamp'], 'coords': item['coords'], 'events': item['events']}
                 yield ret
+            # last information
+            #for item in data:
+                #date_time_obj = datetime.datetime.strptime(item['last_location']['timestamp'], '%Y-%m-%d %H:%M:%S')
+                #todaype = pendulum.now()
+                #lastmonth = todaype.subtract(months=1)
+                #if date_time_obj.year == (datetime.datetime.today()).year and date_time_obj.month >= lastmonth.month:
+                    #ret = {'id': item['id'], 'machine_type': item['machine_type'], 'last_timestamp': item['last_location']['timestamp'],
+                           #'last_coords': item['last_location']['coords'], 'last_events': item['last_location']['events']}
+                    #yield ret
 
-    def get_data(self, quals, columns):
-        url = API_URL.format(self.url)
+    def get_data(self, avain, quals, columns):
+        #url = API_URL.format(self.url)
+        url = API_URL.format("/"+avain+(self.url))
         return self.fetch(url)
 
     def fetch(self, url):
