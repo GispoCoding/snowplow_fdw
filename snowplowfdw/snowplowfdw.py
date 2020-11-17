@@ -13,12 +13,14 @@ DATA = "data"
 VALID_URLS = {
     #DATA: "/mt"
     #DATA: "/op"
-    #DATA: ""
+    DATA: ""
     #DATA: "/mo"
-    # location historiat (ilman last locationeita), jos luetaan kerran minuutissa
+    # location historiat (ilman last locationeita) idlle 45, jos luetaan kerran minuutissa
     #DATA: "/45?history=12"
-    # id avaimilla
-    DATA: "?history=12"
+    # id avaimilla, kerran minuutissa
+    #DATA: "?history=12"
+    # id avaimilla, kerran tunnissa
+    #DATA: "?history=720"
 }
 
 class ForeignDataWrapperError(Exception):
@@ -61,19 +63,78 @@ class SnowplowForeignDataWrapper(ForeignDataWrapper):
             raise e
 
     def execute(self, quals, columns):
-        #avain = (VALID_URLS.get(self.key)).split('?')[0]
         avain = self.machines
         if self.key == DATA:
             data = self.get_data(avain, quals, columns)
             # mt, op, mo
             # for item in data:
             # ret = {'id': item['id'], 'name': item['name']}
-            for item in data["location_history"]:
-                # tiettyyn idseen liittyva history
-                ret = {'id': avain, 'timestamp': item['timestamp'], 'coords': item['coords'], 'events': item['events']}
-                yield ret
+            # location historyt
+            #try:
+                #for item in data['location_history']:
+                    #ret = {}
+                    #try:
+                        #ret.update({'id': avain})
+                    #except KeyError:
+                        #self.log("Snowplow FDW: Invalid JSON content")
+                        #ret.update({'id': None})
+                        #return []
+                    #try:
+                        #ret.update({'timestamp': item['timestamp']})
+                    #except KeyError:
+                        #self.log("Snowplow FDW: Invalid JSON content")
+                        #ret.update({'timestamp': None})
+                        #return []
+                    #try:
+                        #ret.update({'coords': item['coords']})
+                    #except KeyError:
+                        #self.log("Snowplow FDW: Invalid JSON content")
+                        #ret.update({'coords': None})
+                        #return []
+                    #try:
+                        #ret.update({'events': item['events']})
+                    #except KeyError:
+                        #self.log("Snowplow FDW: Invalid JSON content")
+                        #ret.update({'events': None})
+                        #return []
+                    # Jos kaikki data olisi olemassa APIssa
+                    #ret = {'id': avain, 'timestamp': item['timestamp'], 'coords': item['coords'], 'events': item['events']}
+                    #yield ret
+            #except KeyError:
+                #self.log("Snowplow FDW: Invalid JSON content")
+                #ret = {'id': None, 'timestamp': None, 'coords': None, 'events': None}
+                #yield ret
+                #return []
             # last information
-            #for item in data:
+            for item in data:
+                ret = {}
+                try:
+                    ret.update({'id': item['id']})
+                except KeyError:
+                    self.log("Snowplow FDW: Invalid JSON content")
+                    ret.update({'id': None})
+                try:
+                    ret.update({'machine_type': item['machine_type']})
+                except KeyError:
+                    self.log("Snowplow FDW: Invalid JSON content")
+                    ret.update({'machine_type': None})
+                try:
+                    ret.update({'last_timestamp': item['last_location']['timestamp']})
+                except KeyError:
+                    self.log("Snowplow FDW: Invalid JSON content")
+                    ret.update({'last_timestamp': None})
+                try:
+                    ret.update({'last_coords': item['last_location']['coords']})
+                except KeyError:
+                    self.log("Snowplow FDW: Invalid JSON content")
+                    ret.update({'last_coords': None})
+                try:
+                    ret.update({'last_events': item['last_location']['events']})
+                except KeyError:
+                    self.log("Snowplow FDW: Invalid JSON content")
+                    ret.update({'last_events': None})
+                yield ret
+                # Versio, jossa otetaan huomioon vain edellisen kuukauden alusta aktiivisena olleet ajoneuvot
                 #date_time_obj = datetime.datetime.strptime(item['last_location']['timestamp'], '%Y-%m-%d %H:%M:%S')
                 #todaype = pendulum.now()
                 #lastmonth = todaype.subtract(months=1)
@@ -83,8 +144,8 @@ class SnowplowForeignDataWrapper(ForeignDataWrapper):
                     #yield ret
 
     def get_data(self, avain, quals, columns):
-        #url = API_URL.format(self.url)
-        url = API_URL.format("/"+avain+(self.url))
+        url = API_URL.format(self.url)
+        #url = API_URL.format("/"+avain+(self.url))
         return self.fetch(url)
 
     def fetch(self, url):
