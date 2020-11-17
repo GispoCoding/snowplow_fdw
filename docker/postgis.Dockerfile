@@ -22,8 +22,6 @@ RUN pgxn install multicorn
 # Install plpygis for Foreign Data Wrapper support for Postgis
 RUN pip3 install -q plpygis
 RUN pip3 install -q requests
-RUN pip3 install -q datetime
-RUN pip3 install -q pendulum
 
 WORKDIR /
 
