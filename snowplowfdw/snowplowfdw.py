@@ -17,14 +17,14 @@ class ForeignDataWrapperError(Exception):
 class MissingOptionError(ForeignDataWrapperError):
 
     def __init__(self, option):
-        message = "Missing option '%s'" % option
+        message = f"Missing option {option}"
         super(MissingOptionError, self).__init__(message)
 
 
 class OptionTypeError(ForeignDataWrapperError):
 
     def __init__(self, option, option_type):
-        message = "Option %s is not of type %s" % (option, option_type)
+        message = f"Option {option} is not of type {option_type}"
         super(OptionTypeError, self).__init__(message)
 
 
