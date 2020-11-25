@@ -48,7 +48,8 @@ Stop database with `docker-compose stop` and start it next time with `docker-com
     python3 setup.py install
     ```
 
-You may have to restart Postgresql in order to find the package (`systemctl postgresql restart` or `service postgresql restart`).
+
+You have to restart PostgreSQL in order to find the package (`systemctl postgresql restart` or `service postgresql restart`).
 
 # Usage
 
@@ -66,7 +67,7 @@ CREATE FOREIGN TABLE units_temp(
 id INTEGER,
 name varchar
 ) server dev_fdw options(
-url '<url to unit list>', machines '', nrows ''
+url '<url to unit list>'
 );
 ```
 
@@ -84,48 +85,53 @@ INSERT INTO units (id, name)
 SELECT id, name FROM units_temp;
 ```
 
-### Creating a function for updating history information about active units
+### Creating a function for updating history information of active units
 
 Create a function called "update" under cron schema as:
 ```sql
 declare
-	temprow record;
-	aa varchar(50);
+    temprow record;
+    aa varchar(250);
+    bb varchar(250);
+    cc varchar(250) := '<beginning part of the url for snowplow API (before unit ID)>';
+    dd varchar(250) := '<rest of the url for snowplow API (after unit ID)>';
+
 BEGIN
-	SET timezone = '<any timezone>';
 	
 	FOR temprow IN
-		SELECT CAST(id as text) as idtxt FROM units
+		SELECT CAST(id as text) as idtxt FROM idtable WHERE last_timestamp >= current_timestamp at time zone 'Europe/Helsinki' - interval '<any time interval>'
 	LOOP
 		DROP SERVER IF EXISTS dev_fdw CASCADE;
-		DROP FOREIGN TABLE IF EXISTS table_temp;
+		DROP FOREIGN TABLE IF EXISTS tabletemp;
 
 		CREATE SERVER dev_fdw FOREIGN DATA WRAPPER multicorn OPTIONS ( wrapper 'snowplowfdw.SnowplowForeignDataWrapper' );
 		
 		aa := temprow.idtxt;
+		bb := cc || aa || dd;
 		
-		EXECUTE format('CREATE FOREIGN TABLE table_temp(
+		EXECUTE format('CREATE FOREIGN TABLE tabletemp(
 			id varchar,
 			timestamp timestamptz,
-			coords varchar
+			coords varchar,
+			events varchar
 			) server dev_fdw options(
-			url %L, machines %L, nrows %L
-					   )', '<your url>', aa, '<a number of history rows you wish to gather>'
+			url %L
+					   )', bb
 			);
-        
-        -- makes sure that the same history row does not appear twice in the data_table
+
+        -- makes sure that the same history row does not appear twice in the datatable
 		with result as(
 			SELECT *
-			FROM table_temp l
+			FROM tabletemp l
 			WHERE NOT EXISTS (
 				SELECT
-				FROM data_table
-				WHERE  timestamp = l.timestamp)
+				FROM datatable
+				WHERE id = CAST(aa as integer) and timestamp = l.timestamp)
 			)
 		
-		INSERT INTO data_table(
-			id, timestamp, coords)
-		SELECT CAST(id as integer), timestamp, ('POINT' || "coords")::geography)
+		INSERT INTO datatable(
+			id, timestamp, coords, events)
+		SELECT CAST(id as integer), timestamp, ('POINT' || "coords")::geography, CAST(TRIM(CAST("events" as text),'['']') as text)
 		FROM result;
 	
 	END LOOP;
@@ -137,15 +143,13 @@ Create a table for storing the history data of all units:
 ```sql
 CREATE TABLE datatable(
 id integer,
-timestamp timestamptz,
-coords geography
+timestamp timestamp,
+coords geography,
+events varchar
 );
-
-SET timezone = '<any timezone>';
 ```
 
-In case you wish to perform the scheduled task (created above) once in every hour (etc. 12:00, 13:00, ...),
-run the following command:
+In case you wish to perform the scheduled task (e.g. run the update function) once in every hour (12:00, 13:00 etc.), execute the following command:
 ```sql
 SELECT cron.schedule('0 */1 * * *',  $$select cron.update()$$);
 ```

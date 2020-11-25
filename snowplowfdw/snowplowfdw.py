@@ -1,11 +1,9 @@
 import requests
-#import json
+import re
 
 from multicorn import ForeignDataWrapper
 from multicorn.utils import log_to_postgres
 from logging import ERROR, INFO, WARNING
-
-API_URL = "https://tampere.fluentprogress.fi/KuntoTampere/v1/snowplow"
 
 
 class ForeignDataWrapperError(Exception):
@@ -34,29 +32,26 @@ class SnowplowForeignDataWrapper(ForeignDataWrapper):
         super(SnowplowForeignDataWrapper, self).__init__(options, columns)
         self.options = options
         self.columns = columns
-        self.key = self.get_option("url")
-        self.machines = self.get_option("machines")
-        self.nrows = self.get_option("nrows")
+        self.urlop = self.get_option("url")
         try:
-            if self.key == "?history=":
-                self.url = API_URL + "/" + self.machines + self.key + self.nrows
-            else:
-                self.url = API_URL + self.key
+            self.url = self.urlop
         except ValueError as e:
             self.log("Invalid url value {}".format(options.get("url", "")))
             raise e
 
     def execute(self, quals, columns):
         data = self.get_data(quals, columns)
-        if self.key == "/mt" or self.key == "/op" or self.key == "/mo":
+        if "/mt" in self.urlop or "/op" in self.urlop or "/mo" in self.urlop:
             for item in data:
                 ret = {'id': item['id'], 'name': item['name']}
                 yield ret
-        elif self.key == "?history=":
+        elif "history" in self.urlop:
             try:
                 for item in data['location_history']:
                     ret = {}
                     try:
+                        result = re.search('snowplow/(.*)\\?history', self.urlop)
+                        self.machines = result.group(1)
                         ret.update({'id': self.machines})
                     except KeyError:
                         self.log("Snowplow FDW: Invalid JSON content")
@@ -77,13 +72,13 @@ class SnowplowForeignDataWrapper(ForeignDataWrapper):
                         self.log("Snowplow FDW: Invalid JSON content")
                         ret.update({'events': None})
                     # Jos kaikki data olisi olemassa APIssa
-                    #ret = {'id': avain, 'timestamp': item['timestamp'], 'coords': item['coords'], 'events': item['events']}
+                    #ret = {'id': self.machines, 'timestamp': item['timestamp'], 'coords': item['coords'], 'events': item['events']}
                     yield ret
             except KeyError:
                 self.log("Snowplow FDW: Invalid JSON content")
                 ret = {'id': None, 'timestamp': None, 'coords': None, 'events': None}
                 yield ret
-        elif self.key == "":
+        else:
             for item in data:
                 ret = {}
                 try:
@@ -114,10 +109,7 @@ class SnowplowForeignDataWrapper(ForeignDataWrapper):
                 yield ret
 
     def get_data(self, quals, columns):
-        if self.key == "?history=":
-            url = API_URL + "/" + self.machines + self.key + self.nrows
-        else:
-            url = API_URL + self.key
+        url = self.urlop
         return self.fetch(url)
 
     def fetch(self, url):
