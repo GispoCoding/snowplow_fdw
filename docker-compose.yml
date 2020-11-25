@@ -12,13 +12,25 @@ services:
       - POSTGRES_DB=postgres
       - POSTGRES_USER=postgres
       - POSTGRES_PASS=postgres
+      - SHARED_PRELOAD_LIBRARIES='pg_cron'
       - ALLOW_IP_RANGE=0.0.0.0/0
       - FOREIGN_SERVER=dev_fdw
     ports:
       - 5434:5432
-    restart: "no"
+    restart: unless-stopped
     healthcheck:
       test: "exit 0"
+
+  pgadmin:
+    image: dpage/pgadmin4:4.27
+    environment:
+      - PGADMIN_DEFAULT_EMAIL=no@email.service
+      - PGADMIN_DEFAULT_PASSWORD=testpass
+    depends_on:
+      - postgis-db
+    ports:
+      - 5000:80
+    restart: unless-stopped
 
 volumes:
   fdw-db-data:

@@ -102,6 +102,7 @@ BEGIN
 	
 	FOR temprow IN
 		SELECT CAST(id as text) as idtxt FROM idtable WHERE last_timestamp >= current_timestamp at time zone '<any time zone>' - interval '<any time interval>'
+
 	LOOP
 		DROP SERVER IF EXISTS dev_fdw CASCADE;
 		DROP FOREIGN TABLE IF EXISTS tabletemp;
