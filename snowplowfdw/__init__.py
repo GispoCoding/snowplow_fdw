@@ -1,2 +1,2 @@
 from snowplowfdw._version import __version__
-from snowplowfdw.snowplowfdw import ConstantForeignDataWrapper
+from snowplowfdw.snowplowfdw import SnowplowForeignDataWrapper
