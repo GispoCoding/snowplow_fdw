@@ -1,4 +1,5 @@
 # snowplow_fdw
+
 PostgreSQL foreign data wrapper for JSON data from snowplow API.
 
 Inspired greatly by [geofdw](https://github.com/bosth/geofdw).
@@ -6,11 +7,12 @@ Inspired greatly by [geofdw](https://github.com/bosth/geofdw).
 # Installation
 
 ## Development
+
 1. Install docker and docker-compose.
 2. Run `docker-compose up -d --build` (if you are not running with root permissions add `sudo` in the beginning of each command)
 3. Install snowplow_fdw foreign data wrapper with: `docker-compose exec postgis-db bash /scripts/dev_install.sh`
-4. If you make any changes to the code, just repeat the installation
-5. Run `docker ps` to find out postgis-db docker name (<postgis-db-name> in next)
+4. If you make any changes to the code, just repeat the installation (steps 3-9)
+5. Run `docker ps` to find out postgis-db docker name ('<postgis-db-name>' in next)
 6. Run `docker cp docker/pg_hba.conf snowplow_fdw_<postgis-db-name>:/etc/postgresql/12/main/`
 7. Run `docker-compose exec postgis-db bash`
 8. Run `chown postgres:postgres /etc/postgresql/12/main/pg_hba.conf` and `exit`
@@ -18,11 +20,11 @@ Inspired greatly by [geofdw](https://github.com/bosth/geofdw).
 
 Stop database with `docker-compose stop` and start it next time with `docker-compose start`.
 
-## Production (Tested in Debian buster)
+## Production (tested in Debian buster)
 
-1. Install dependencies
+1. Install dependencies:
     ```shell script
-    # Assuming that you have postgresql and postgis installed 
+    # Assuming that you have PostgreSQL and PostGIS installed 
     apt update
     apt install python python3 python3-dev python3-pip pgxnclient
     pip3 install setuptools
@@ -35,7 +37,7 @@ Stop database with `docker-compose stop` and start it next time with `docker-com
     pip3 install -q requests
     ```
 
-2. Connect to your database and enable Multicorn and pg_cron extension (for scheduling tasks)
+2. Connect to your database and enable Multicorn and pg_cron extension (for scheduling tasks):
     ```sql
     CREATE EXTENSION postgis;
     CREATE EXTENSION multicorn;
@@ -47,7 +49,6 @@ Stop database with `docker-compose stop` and start it next time with `docker-com
     ```shell script
     python3 setup.py install
     ```
-
 
 You have to restart PostgreSQL in order to find the package (`systemctl postgresql restart` or `service postgresql restart`).
 
@@ -64,30 +65,31 @@ CREATE SERVER dev_fdw FOREIGN DATA WRAPPER multicorn OPTIONS (wrapper 'snowplowf
 Create a foreign table:
 ```sql
 CREATE FOREIGN TABLE units_temp(
-id INTEGER,
-name varchar
-) server dev_fdw options(
-url '<url to unit list>'
+    id integer,
+    name varchar
+    ) server dev_fdw options(
+    url '<url to the unit list>'
 );
 ```
 
 Create a table for storing the unit information:
 ```sql
 CREATE TABLE units(
-id INTEGER,
-name varchar
+    id integer,
+    name varchar
 );
 ```
 
-Insert the data from foreign table to units table:
+Insert data from the foreign table to the new units table:
 ```sql
-INSERT INTO units (id, name)
+INSERT INTO units(
+    id, name)
 SELECT id, name FROM units_temp;
 ```
 
-### Creating a function for updating history information of active units
+### Creating a function for updating history information of the active units
 
-Create a function called "update" under cron schema as:
+Create a function for taking care of gathering units' location history data under cron schema with:
 ```sql
 declare
     temprow record;
@@ -99,7 +101,8 @@ declare
 BEGIN
 	
 	FOR temprow IN
-		SELECT CAST(id as text) as idtxt FROM idtable WHERE last_timestamp >= current_timestamp at time zone 'Europe/Helsinki' - interval '<any time interval>'
+		SELECT CAST(id as text) as idtxt FROM idtable WHERE last_timestamp >= current_timestamp at time zone '<any time zone>' - interval '<any time interval>'
+
 	LOOP
 		DROP SERVER IF EXISTS dev_fdw CASCADE;
 		DROP FOREIGN TABLE IF EXISTS tabletemp;
@@ -119,7 +122,6 @@ BEGIN
 					   )', bb
 			);
 
-        -- makes sure that the same history row does not appear twice in the datatable
 		with result as(
 			SELECT *
 			FROM tabletemp l
@@ -139,17 +141,17 @@ BEGIN
 END;
 ```
 
-Create a table for storing the history data of all units:
+Create a table for storing history data of all units:
 ```sql
 CREATE TABLE datatable(
-id integer,
-timestamp timestamp,
-coords geography,
-events varchar
+    id integer,
+    timestamp timestamp,
+    coords geography,
+    events varchar
 );
 ```
 
 In case you wish to perform the scheduled task (e.g. run the update function) once in every hour (12:00, 13:00 etc.), execute the following command:
 ```sql
-SELECT cron.schedule('0 */1 * * *',  $$select cron.update()$$);
+SELECT cron.schedule('0 */1 * * *',  $$select cron.<name of your update function>()$$);
 ```
