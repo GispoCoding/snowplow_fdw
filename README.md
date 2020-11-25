@@ -12,7 +12,7 @@ Inspired greatly by [geofdw](https://github.com/bosth/geofdw).
 2. Run `docker-compose up -d --build` (if you are not running with root permissions add `sudo` in the beginning of each command)
 3. Install snowplow_fdw foreign data wrapper with: `docker-compose exec postgis-db bash /scripts/dev_install.sh`
 4. If you make any changes to the code, just repeat the installation (steps 3-9)
-5. Run `docker ps` to find out postgis-db docker name ('<postgis-db-name>' in next)
+5. Run `docker ps` to find out postgis-db docker name (`<postgis-db-name>` in next)
 6. Run `docker cp docker/pg_hba.conf snowplow_fdw_<postgis-db-name>:/etc/postgresql/12/main/`
 7. Run `docker-compose exec postgis-db bash`
 8. Run `chown postgres:postgres /etc/postgresql/12/main/pg_hba.conf` and `exit`
