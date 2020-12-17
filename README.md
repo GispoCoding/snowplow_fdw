@@ -1,6 +1,6 @@
 # snowplow_fdw
 
-PostgreSQL foreign data wrapper for JSON data from snowplow API.
+PostgreSQL Foreign Data Wrapper for JSON data from Snowplow API.
 
 Inspired greatly by [geofdw](https://github.com/bosth/geofdw).
 
@@ -10,14 +10,14 @@ Inspired greatly by [geofdw](https://github.com/bosth/geofdw).
 
 1. Install docker and docker-compose.
 2. Run `docker-compose up -d --build` (if you are not running with root permissions add `sudo` in the beginning of each command)
-3. Install snowplow_fdw foreign data wrapper with: `docker-compose exec postgis-db bash /scripts/dev_install.sh`
-4. If you make any changes to the code, just repeat the installation (steps 3-9)
-5. Run `docker ps` to find out postgis-db docker name (`<postgis-db-name>` in next)
-6. Run `docker cp docker/pg_hba.conf snowplow_fdw_<postgis-db-name>:/etc/postgresql/12/main/`
-7. Run `docker-compose exec postgis-db bash`
-8. Run `chown postgres:postgres /etc/postgresql/12/main/pg_hba.conf` and `exit`
-9. Restart with `docker-compose restart postgis-db`
+3. Install snowplow_fdw Foreign Data Wrapper with: `docker-compose exec postgis-db bash /scripts/dev_install.sh`
+4. Run `docker ps` to find out postgis-db docker name (`<postgis-db-name>` in next)
+5. Run `docker cp docker/pg_hba.conf snowplow_fdw_<postgis-db-name>:/etc/postgresql/12/main/`
+6. Run `docker-compose exec postgis-db bash`
+7. Run `chown postgres:postgres /etc/postgresql/12/main/pg_hba.conf` and `exit`
+8. Restart with `docker-compose restart postgis-db`
 
+If you make any changes to the code, just repeat the installation (steps 3-9). 
 Stop database with `docker-compose stop` and start it next time with `docker-compose start`.
 
 ## Production (tested in Debian buster)
@@ -54,13 +54,13 @@ You have to restart PostgreSQL in order to find the package (`systemctl postgres
 
 # Usage
 
-### Creating an fdw server
+### Creating a fdw server
 
 ```sql
 CREATE SERVER dev_fdw FOREIGN DATA WRAPPER multicorn OPTIONS (wrapper 'snowplowfdw.SnowplowForeignDataWrapper');
 ```
 
-### Creating a table containing unit information
+### Creating a metatable containing unit information
 
 Create a foreign table:
 ```sql
@@ -72,7 +72,7 @@ CREATE FOREIGN TABLE units_temp(
 );
 ```
 
-Create a table for storing the unit information:
+Create a table for storing the unit information fetched from the Snowplow API:
 ```sql
 CREATE TABLE units(
     id integer,
@@ -80,7 +80,7 @@ CREATE TABLE units(
 );
 ```
 
-Insert data from the foreign table to the new units table:
+Insert data from the foreign table to the `units` table:
 ```sql
 INSERT INTO units(
     id, name)
@@ -89,20 +89,75 @@ SELECT id, name FROM units_temp;
 
 ### Creating a function for updating history information of the active units
 
-Create a function for taking care of gathering units' location history data under cron schema with:
+Create an `idupdate` function (Language: plpgsql, Return type: void) for determining which units have
+been active after the previous time we gathered units' location history data.
+Create the function under cron schema with the following code:
+```sql
+BEGIN
+	DROP SERVER IF EXISTS dev_fdw CASCADE;
+	DROP FOREIGN TABLE IF EXISTS idtemp;
+
+	CREATE SERVER dev_fdw FOREIGN DATA WRAPPER multicorn OPTIONS ( wrapper 'snowplowfdw.SnowplowForeignDataWrapper' );
+	
+	CREATE FOREIGN TABLE idtemp(
+		id varchar,
+		machine_type varchar,
+		last_timestamp timestamptz,
+		last_coords varchar,
+		last_events varchar
+		) server dev_fdw options(
+		url '<url to the page containing latest information about units' whereabouts>');
+
+	UPDATE idtable
+	SET last_timestamp = idtemp.last_timestamp,
+	last_coords = ('POINT' || idtemp.last_coords)::geography,
+	last_events = CAST(TRIM(CAST(idtemp.last_events as text),'['']') as text),
+	machine_type = idtemp.machine_type
+	FROM idtemp
+	WHERE idtable.id = CAST(idtemp.id as integer);
+
+	with result as(
+		SELECT *
+		FROM idtemp l
+		WHERE NOT EXISTS (
+			SELECT
+			FROM idtable
+			WHERE CAST(id as text) = l.id)
+	)
+		
+	INSERT INTO idtable(
+		id, machine_type, last_timestamp, last_coords, last_events)
+	SELECT CAST(id as integer), machine_type, last_timestamp, ('POINT' || "last_coords")::geography, CAST(TRIM(CAST("last_events" as text),'['']') as text)
+	FROM result;
+
+END;
+```
+
+Create a table for storing latest information about units:
+```sql
+CREATE TABLE idtable(
+   id integer,
+   machine_type varchar,
+   last_timestamp timestamp,
+   last_coords geography,
+   last_events varchar
+);
+```
+
+Create a `dataupdate` function (Language: plpgsql, Return type: void) for taking care of gathering
+active units' location history data.  Create the function under cron schema with the following code:
 ```sql
 declare
-    temprow record;
-    aa varchar(250);
-    bb varchar(250);
-    cc varchar(250) := '<beginning part of the url for snowplow API (before unit ID)>';
-    dd varchar(250) := '<rest of the url for snowplow API (after unit ID)>';
+	temprow record;
+	aa varchar(250);
+	bb varchar(250);
+	cc varchar(250) := '<beginning part of the url (before unit ID)>';
+	dd varchar(250) := '<rest of the url (after unit ID)>';
 
 BEGIN
 	
 	FOR temprow IN
-		SELECT CAST(id as text) as idtxt FROM idtable WHERE last_timestamp >= current_timestamp at time zone '<any time zone>' - interval '<any time interval>'
-
+		SELECT CAST(id as text) as idtxt FROM idtable WHERE last_timestamp >= current_timestamp at time zone '<any time zone>' - interval '<any time interval 1>'
 	LOOP
 		DROP SERVER IF EXISTS dev_fdw CASCADE;
 		DROP FOREIGN TABLE IF EXISTS tabletemp;
@@ -121,27 +176,19 @@ BEGIN
 			url %L
 					   )', bb
 			);
-
-		with result as(
-			SELECT *
-			FROM tabletemp l
-			WHERE NOT EXISTS (
-				SELECT
-				FROM datatable
-				WHERE id = CAST(aa as integer) and timestamp = l.timestamp)
-			)
 		
 		INSERT INTO datatable(
 			id, timestamp, coords, events)
 		SELECT CAST(id as integer), timestamp, ('POINT' || "coords")::geography, CAST(TRIM(CAST("events" as text),'['']') as text)
-		FROM result;
+		FROM tabletemp
+		WHERE extract(doy from timestamp)=extract(doy from current_timestamp at time zone '<any time zone>') and extract(hour from timestamp) = extract(hour from current_timestamp at time zone '<any time zone>' - interval '<any time interval 2>');
 	
 	END LOOP;
 
 END;
 ```
 
-Create a table for storing history data of all units:
+Create a table for storing history data of the units:
 ```sql
 CREATE TABLE datatable(
     id integer,
@@ -151,7 +198,34 @@ CREATE TABLE datatable(
 );
 ```
 
-In case you wish to perform the scheduled task (e.g. run the update function) once in every hour (12:00, 13:00 etc.), execute the following command:
+In case you wish to perform the scheduled history data gathering task e.g. once in every hour,
+execute the following commands:
 ```sql
-SELECT cron.schedule('0 */1 * * *',  $$select cron.<name of your update function>()$$);
+SELECT cron.schedule('1 */1 * * *',  $$select cron.idupdate()$$);
+SELECT cron.schedule('5 */1 * * *',  $$select cron.dataupdate()$$);
+```
+
+The commands state that the `idupdate` function gets ran one minute past every hour and the
+`dataupdate` function gets ran five minutes past every hour.
+
+Note that if you schedule the tasks to be run once in every hour, some suitable choices for
+`<any time interval 1>` and `<any time interval 2>` are '1 hour 15 minutes' and '1 hour'. In that
+case one suitable choice for a number of rows we wish to fetch (needed when forming
+`<rest of the url (after unit ID)>`) is 1000.
+
+Once you want to terminate the execution of the scheduled tasks, run:
+```sql
+SELECT cron.unschedule(<job id>);
+```
+
+To get more knowledge about the scheduled tasks, you can run queries like
+```sql
+SELECT *
+FROM cron.job;
+```
+or
+```sql
+SELECT *
+FROM cron.job_run_details
+WHERE jobid=<job id>;
 ```
