@@ -106,7 +106,7 @@ BEGIN
 		last_coords varchar,
 		last_events varchar
 		) server dev_fdw options(
-		url '<url to the page containing latest information about units' whereabouts>');
+		url '<url to the page containing latest information about units>');
 
 	UPDATE idtable
 	SET last_timestamp = idtemp.last_timestamp,
